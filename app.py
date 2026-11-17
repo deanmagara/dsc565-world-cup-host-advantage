@@ -37,12 +37,15 @@ if st.button("Generate report with AI agents", type="primary", disabled=not has_
     from agents.pipeline import run_pipeline
     with st.spinner("Analyst → Critic → Writer are working…"):
         try:
-            run_pipeline()
+            st.session_state["report"] = run_pipeline()["report"]
         except Exception as e:
             st.error(f"Agent run failed: {e}")
+            cached = OUT / "agent_run.json"
+            if cached.exists():  # fall back to the last saved report
+                st.caption("Showing the last saved report instead.")
+                st.session_state["report"] = json.loads(cached.read_text())["report"]
 
-report = OUT / "agent_run.json"
-if report.exists():
-    st.markdown(json.loads(report.read_text())["report"])
+if "report" in st.session_state:
+    st.markdown(st.session_state["report"])
 elif not has_key:
     st.info("Add your OpenAI key to `.env` to generate the report.")

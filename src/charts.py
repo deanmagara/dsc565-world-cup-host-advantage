@@ -21,7 +21,8 @@ def load():
 
 def _layout(fig, title, **kw):
     fig.update_layout(title=title, template="plotly_white", height=kw.pop("height", 480),
-                      margin=dict(l=10, r=10, t=60, b=10), legend=dict(orientation="h", y=1.08, x=0), **kw)
+                      margin=dict(l=10, r=10, t=100, b=10),
+                      legend=dict(orientation="h", y=1.0, yanchor="bottom", x=0), **kw)
     return fig
 
 
@@ -48,7 +49,8 @@ def era_bars(era: pd.DataFrame, metric="ppg"):
     fig = go.Figure()
     fig.add_bar(x=e["era"], y=e["mean_other"], name="Other World Cups", marker_color=OTHER)
     fig.add_bar(x=e["era"], y=e["mean_home"], name="Home World Cup", marker_color=HOME,
-                text=[f"gap {g:+.2f}<br>p={p:.3f}" for g, p in zip(e["mean_gap"], e["perm_p_one_sided"])],
+                text=[f"gap {g:+.2f}<br>" + ("p < 0.001" if p < 0.001 else f"p = {p:.3f}")
+                      for g, p in zip(e["mean_gap"], e["perm_p_one_sided"])],
                 textposition="outside")
     fig.update_yaxes(range=[min(0, e["mean_other"].min() - 0.2), e["mean_home"].max() * 1.3])
     return _layout(fig, f"{LABELS[metric]} by era (n hosts: " + ", ".join(map(str, e["n_hosts"])) + ")",
@@ -78,6 +80,9 @@ def permutation_hist(res: dict, metric="ppg"):
     fig.add_histogram(x=r["null_distribution_sample"], nbinsx=40, marker_color=OTHER, name="Shuffled 'home' labels")
     fig.add_vline(x=r["mean_gap"], line=dict(color=HOME, width=3),
                   annotation_text=f"Observed {r['mean_gap']:+.2f}", annotation_position="top left")
+    lo, hi = min(r["null_distribution_sample"]), max(max(r["null_distribution_sample"]), r["mean_gap"])
+    pad = (hi - lo) * 0.12
+    fig.update_xaxes(range=[lo - pad, hi + pad])
     p = r["perm_p_one_sided"]
     ptxt = "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
     return _layout(fig, f"Permutation test: average host gap vs. chance ({ptxt})",

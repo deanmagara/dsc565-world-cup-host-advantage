@@ -1,0 +1,7 @@
+metric,era,n_hosts,hosts,mean_home,mean_other,mean_gap,perm_p_one_sided
+ppg,1930-1950,4,"Uruguay 1930, Italy 1934, France 1938, Brazil 1950",2.3167,1.7598,0.5568,0.0314
+ppg,1954-1994,11,"Switzerland 1954, Sweden 1958, Chile 1962, England 1966, Mexico 1970, Germany 1974, Argentina 1978, Spain 1982, Mexico 1986, Italy 1990, United States 1994",1.9868,1.3597,0.6271,0.0002
+ppg,1998-2022,7,"France 1998, Japan 2002, Korea Republic 2002, Germany 2006, South Africa 2010, Brazil 2014, Russia 2018",1.8323,1.4189,0.4134,0.0116
+gdpg,1930-1950,4,"Uruguay 1930, Italy 1934, France 1938, Brazil 1950",1.8667,0.5598,1.3068,0.0034
+gdpg,1954-1994,11,"Switzerland 1954, Sweden 1958, Chile 1962, England 1966, Mexico 1970, Germany 1974, Argentina 1978, Spain 1982, Mexico 1986, Italy 1990, United States 1994",0.6682,-0.052,0.7201,0.0002
+gdpg,1998-2022,7,"France 1998, Japan 2002, Korea Republic 2002, Germany 2006, South Africa 2010, Brazil 2014, Russia 2018",0.4986,0.1123,0.3864,0.0674

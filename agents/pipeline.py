@@ -50,8 +50,16 @@ def get_team_record(team: str) -> str:
     return rows[["year", "is_host", "matches", "wins", "draws", "losses", "gf", "ga", "ppg", "last_four"]].round(3).to_csv(index=False)
 
 
-TOOLS = {"get_summary": get_summary, "get_host_table": get_host_table,
-         "get_era_table": get_era_table, "get_team_record": get_team_record}
+def get_tournament_matches(team: str, year: int) -> str:
+    tm = pd.read_csv(ROOT / "data" / "processed" / "team_matches.csv")
+    rows = tm[(tm["team"].str.lower() == team.lower()) & (tm["year"] == int(year))]
+    if rows.empty:
+        return f"No matches for {team} in {year}."
+    return rows[["date", "round", "opponent", "gf", "ga", "result"]].to_csv(index=False)
+
+
+TOOLS = {"get_summary": get_summary, "get_host_table": get_host_table, "get_era_table": get_era_table,
+         "get_team_record": get_team_record, "get_tournament_matches": get_tournament_matches}
 
 TOOL_SPECS = [
     {"type": "function", "function": {"name": "get_summary", "description":
@@ -67,6 +75,11 @@ TOOL_SPECS = [
     {"type": "function", "function": {"name": "get_team_record", "description":
         "A single team's record in every World Cup it played (1930-2022).",
         "parameters": {"type": "object", "properties": {"team": {"type": "string"}}, "required": ["team"]}}},
+    {"type": "function", "function": {"name": "get_tournament_matches", "description":
+        "Every match a team played at one World Cup: date, round, opponent, goals for/against, result "
+        "(shootouts already counted as draws).",
+        "parameters": {"type": "object", "properties": {"team": {"type": "string"}, "year": {"type": "integer"}},
+                       "required": ["team", "year"]}}},
 ]
 
 # ---------- agents ----------
@@ -92,7 +105,7 @@ Return a markdown list with two sections:
 - **Caveats to add**: overclaiming (e.g. causation, 'proves'), small samples (era n), the trend test's
   significance, confounders noted by Pollard (crowd, travel, referees, qualification/automatic entry,
   investment before hosting), format changes, the Qatar exclusion, and successor-team merges.
-Be concise and specific. If the draft is fully correct, say so under Errors."""
+Check record totals (wins/draws/losses, goals for/against) against get_team_record exactly. Be concise and specific. If the draft is fully correct, say so under Errors."""
 
 WRITER = CONTEXT + """
 You are the WRITER. Using the Analyst draft and the Critic's review, write the final report in markdown with
@@ -122,14 +135,39 @@ def run_agent(client: OpenAI, name: str, system: str, user: str, emit: Callable)
     raise RuntimeError(f"{name} did not finish within {MAX_TOOL_ROUNDS} tool rounds")
 
 
-def run_pipeline(emit: Callable = lambda agent, kind, text: None) -> dict:
+HOST_ANALYST = CONTEXT + """
+You are the ANALYST. Focus on ONE host nation's home World Cup (given by the user). Call the tools to get:
+its row in the host table, its record at every World Cup, its match-by-match results at the home Cup,
+and the overall summary for context. Then write findings in markdown:
+1. How the host did at home (record, points per game, goal difference, how far it went, key results).
+2. How that compares with the same team's other World Cups (the gap).
+3. How this host compares with the other hosts (rank of its gap among all hosts, the average gap of +0.55).
+Use ONLY numbers returned by tools. Round to 2 decimals. Copy every number exactly as a tool returns it (e.g. goals for/against are the gf/ga columns of get_team_record); never add up or calculate totals yourself, but do round decimals to 2 places."""
+
+HOST_WRITER = CONTEXT + """
+You are the WRITER. Using the Analyst draft and the Critic's review, write a short report on this ONE host
+in markdown, with a title '## <Team> <Year>: ...' that states the main finding, then sections
+four ### sections titled exactly: At home | Compared with its other World Cups | Compared with other hosts | Caveats (2-3 bullets). No punctuation after headings.
+Fix every error the Critic found. Under 300 words, plain language, numbers to 2 decimals. Do not invent numbers. Copy every number exactly as a tool returns it (e.g. goals for/against are the gf/ga columns of get_team_record); never add up or calculate totals yourself, but do round decimals to 2 places. Do not repeat overall trend p-values; keep the report about this host."""
+
+
+def run_pipeline(emit: Callable = lambda agent, kind, text: None, host: str | None = None) -> dict:
+    """host: e.g. 'Brazil 2014' for a single-host report; None for the overall report."""
     client = OpenAI()
-    draft = run_agent(client, "Analyst", ANALYST, "Write the findings.", emit)
-    review = run_agent(client, "Critic", CRITIC, f"Analyst draft:\n\n{draft}", emit)
-    report = run_agent(client, "Writer", WRITER, f"Analyst draft:\n\n{draft}\n\nCritic review:\n\n{review}", emit)
-    out = {"model": MODEL, "analyst": draft, "critic": review, "report": report}
-    (OUT / "agent_run.json").write_text(json.dumps(out, indent=2))
-    (OUT / "report.md").write_text(report)
+    analyst, writer, task = ANALYST, WRITER, "Write the findings."
+    if host:
+        analyst, writer, task = HOST_ANALYST, HOST_WRITER, f"The host to analyze is {host}."
+    draft = run_agent(client, "Analyst", analyst, task, emit)
+    review = run_agent(client, "Critic", CRITIC, f"{task}\n\nAnalyst draft:\n\n{draft}", emit)
+    report = run_agent(client, "Writer", writer,
+                       f"{task}\n\nAnalyst draft:\n\n{draft}\n\nCritic review:\n\n{review}", emit)
+    out = {"model": MODEL, "host": host, "analyst": draft, "critic": review, "report": report}
+    if host:  # one saved report per host, used as a fallback if a live run fails
+        (OUT / "host_reports").mkdir(exist_ok=True)
+        (OUT / "host_reports" / f"{host.replace(' ', '_')}.json").write_text(json.dumps(out, indent=2))
+    else:
+        (OUT / "agent_run.json").write_text(json.dumps(out, indent=2))
+        (OUT / "report.md").write_text(report)
     return out
 
 

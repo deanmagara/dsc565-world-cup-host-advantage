@@ -33,15 +33,19 @@ st.caption("Green = did better at home, red = did worse. Qatar 2022 is left out 
 
 st.subheader("AI-written report")
 has_key = bool(os.getenv("OPENAI_API_KEY")) or (ROOT / ".env").exists()
+st.write("Pick a host nation and three AI agents (Analyst → Critic → Writer) will write a report on it, "
+         "using only numbers from our analysis.")
+hosts = [f"{t} {y}" for t, y in ht[["team", "year"]].values]
+host = st.selectbox("Host nation", hosts, index=hosts.index("Brazil 2014"))
 if st.button("Generate report with AI agents", type="primary", disabled=not has_key):
     from agents.pipeline import run_pipeline
-    with st.spinner("Analyst → Critic → Writer are working…"):
+    with st.spinner(f"Analyst → Critic → Writer are working on {host}…"):
         try:
-            st.session_state["report"] = run_pipeline()["report"]
+            st.session_state["report"] = run_pipeline(host=host)["report"]
         except Exception as e:
             st.error(f"Agent run failed: {e}")
-            cached = OUT / "agent_run.json"
-            if cached.exists():  # fall back to the last saved report
+            cached = OUT / "host_reports" / f"{host.replace(' ', '_')}.json"
+            if cached.exists():  # fall back to the last saved report for this host
                 st.caption("Showing the last saved report instead.")
                 st.session_state["report"] = json.loads(cached.read_text())["report"]
 
